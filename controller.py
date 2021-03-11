@@ -10,6 +10,7 @@ sqs_client = boto3.client('sqs',region_name = 'us-east-1')
 queue_url = 'https://sqs.us-east-1.amazonaws.com/961085621450/input-queue.fifo'
 
 max_threshold = 20
+count = 1
 
 # create single instance
 def create_instance():
@@ -21,6 +22,22 @@ def create_instance():
         InstanceType='t2.micro',
         KeyName='Cloud Computing Project1'
     )
+
+    # naming the instances
+    for instance in instances:
+        global count
+        ec2_client.create_tags(
+            Resources=[
+                instance.id,
+            ],
+            Tags=[
+                {
+                    'Key': 'Name',
+                    'Value': 'app-instance' + str(count)
+                },
+            ]
+        )
+        count +=1
 
     for instance in instances:
         instance.wait_until_running()
@@ -36,6 +53,21 @@ def create_instances(n):
         InstanceType='t2.micro',
         KeyName='Cloud Computing Project1'
     )
+    # naming the instances
+    for instance in instances:
+        global count
+        ec2_client.create_tags(
+            Resources=[
+                instance.id,
+            ],
+            Tags=[
+                {
+                    'Key': 'Name',
+                    'Value': 'app-instance' + str(count)
+                },
+            ]
+        )
+        count +=1
 
     for instance in instances:
         instance.wait_until_running()
@@ -110,18 +142,16 @@ def start_instances(ids):
 def start_instance(id):
     ec2_resource.instances.filter(InstanceIds = [id], Filters = [{'Name' : 'instance-state-name','Values' : ['stopped','stopping']}]).start()
 
-    # instance = ec2_resource.Instance(id)
-    # instance.wait_until_running()
-
-
 # number of messages in the queue
 def input_queue_length():
     queue = sqs_resource.Queue(queue_url)
     return int(queue.attributes.get('ApproximateNumberOfMessages'))
 
+# function to find the mode 
 def most_frequent(l): 
     return max(set(l), key = l.count) 
 
+# wairs for all the instances to start
 def waiter_function(ids):
     for id in ids:
         instance = ec2_resource.Instance(id)
@@ -129,14 +159,19 @@ def waiter_function(ids):
 
 if __name__=="__main__":
 
-    while 1:
-        ql = []
-        x = 50
-        while x:
-            ql.append(input_queue_length())
-            x -= 1
-        # q_length = input_queue_length()
-        q_length = most_frequent(ql)
+    x = 1
+    while x:
+
+        # finding mode of 100 queue lengths
+        # ql = []
+        # x = 50
+        # while x:
+        #     ql.append(input_queue_length())
+        #     x -= 1
+        q_length = input_queue_length()
+        # q_length = most_frequent(ql)
+
+        # get the number of active and idle instances
         active_instances = len(get_running_instances())
         idle_instances = len(get_idle_instances())
 
@@ -146,12 +181,18 @@ if __name__=="__main__":
         print('idle instances:', idle_instances)
         print('--------------------------------------------------------')
 
+        # if the queue length is 0 then continue polling the queue for any messages
         if q_length == 0:
+            time.sleep(20)
             continue
+
+        # if queue length is more than 19 then we have to start/create instances upto 19
         elif q_length > max_threshold:
-            print('q_length > max_threshold')
+
+            # create any instance if needed
             if max_threshold - active_instances - idle_instances > 0:
                 create_instances(max_threshold - active_instances - idle_instances)
+            # start all the idle instances
             if idle_instances > 0:
                 l = []
                 while idle_instances:
@@ -162,15 +203,17 @@ if __name__=="__main__":
                             l.append(temp)
                             idle_instances -= 1
                 waiter_function(l)
-            
+        
+        # if queue length is greater than the number of idle instances, we need to start all the idle instances and create new ones if needed
         elif q_length > idle_instances:
-            print('q_length > idle_instances')
+
+            # create instances if needed
             if (idle_instances + active_instances + (q_length - idle_instances)) <= max_threshold and (q_length - idle_instances) > 0:
                 create_instances(q_length - idle_instances)
             else:
                 if max_threshold - active_instances - idle_instances > 0:
                     create_instances(max_threshold - active_instances - idle_instances)
-
+            # start the idle instances
             if idle_instances > 0: 
                 l = []
                 while idle_instances:
@@ -182,11 +225,12 @@ if __name__=="__main__":
                             idle_instances -= 1
                 waiter_function(l)
             
+        # if queue length is less than the number of idle isntances, start the necessary number of idle instances
         elif q_length <= idle_instances:
-            print('q_length <= idle_instances')
+
+            # start the necessary idle instances
             l = []
             while q_length > 0:
-                print('-------- qlength val = ',q_length, '-----------')
                 if len(get_stopped_instances()) > 0:
                     temp = get_stopped_instances()[0]
                     if temp not in l:
@@ -195,12 +239,9 @@ if __name__=="__main__":
                         l.append(temp)
                         q_length -= 1
             waiter_function(l)
-            print(l)
-            print('-------------------After wait-------------------')
-            
-        print('sleeping for 30 secs...')
-        time.sleep(30)
-        # 3043
+
+        time.sleep(20)
+
 
         
         
