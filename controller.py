@@ -10,7 +10,7 @@ sqs_client = boto3.client('sqs',region_name = 'us-east-1')
 queue_url = 'https://sqs.us-east-1.amazonaws.com/961085621450/input-queue.fifo'
 
 max_threshold = 20
-count = 1
+count = 0
 
 # create single instance
 def create_instance():
@@ -33,11 +33,11 @@ def create_instance():
             Tags=[
                 {
                     'Key': 'Name',
-                    'Value': 'app-instance' + str(count)
+                    'Value': 'app-instance' + str(count + 1)
                 },
             ]
         )
-        count +=1
+        count = (count + 1) % 19
 
     for instance in instances:
         instance.wait_until_running()
@@ -63,11 +63,11 @@ def create_instances(n):
             Tags=[
                 {
                     'Key': 'Name',
-                    'Value': 'app-instance' + str(count)
+                    'Value': 'app-instance' + str(count + 1)
                 },
             ]
         )
-        count +=1
+        count = (count + 1) % 19
 
     for instance in instances:
         instance.wait_until_running()
@@ -159,27 +159,26 @@ def waiter_function(ids):
 
 if __name__=="__main__":
 
-    x = 1
-    while x:
+    while 1:
 
         # finding mode of 100 queue lengths
-        # ql = []
-        # x = 50
-        # while x:
-        #     ql.append(input_queue_length())
-        #     x -= 1
-        q_length = input_queue_length()
-        # q_length = most_frequent(ql)
+        ql = []
+        x = 50
+        while x:
+            ql.append(input_queue_length())
+            x -= 1
+        # q_length = input_queue_length()
+        q_length = most_frequent(ql)
 
         # get the number of active and idle instances
         active_instances = len(get_running_instances())
         idle_instances = len(get_idle_instances())
 
-        print('--------------------------------------------------------')
-        print('queue length', q_length)
-        print('active instances:', active_instances)
-        print('idle instances:', idle_instances)
-        print('--------------------------------------------------------')
+        # print('--------------------------------------------------------')
+        # print('queue length', q_length)
+        # print('active instances:', active_instances)
+        # print('idle instances:', idle_instances)
+        # print('--------------------------------------------------------')
 
         # if the queue length is 0 then continue polling the queue for any messages
         if q_length == 0:
